@@ -3611,6 +3611,7 @@ Supported attributes:
       let no_tc = if proof_context.options.no_tc = Some true then true else false in
       let open Ltac_plugin in
       let sigma = get_sigma state in
+      let () = Feedback.msg_info Pp.(str "enter call-ltac1 with " ++ str (if Evd.Metamap.is_empty (Evd.meta_list sigma) then "no" else "some") ++ str " metas") in
 
        let tac_args = tac_args |> List.map (function
          | Coq_elpi_arg_HOAS.Ctrm t -> Tacinterp.Value.of_constr t
@@ -3647,6 +3648,7 @@ Supported attributes:
             let (), pv, _, _ =
               let vernac_state = Vernacstate.freeze_full_state () in
               try
+                let () = Feedback.msg_info Pp.(str "calling tactic with " ++ str (if Evd.Metamap.is_empty (Evd.meta_list (snd (proofview pv))) then "no" else "some") ++ str " metas") in
                 let rc = apply ~name:(Id.of_string "elpi") ~poly:false proof_context.env focused_tac pv in
                 let pstate = Vernacstate.Stm.pstate (Vernacstate.freeze_full_state ()) in
                 let vernac_state = Vernacstate.Stm.set_pstate vernac_state pstate in

@@ -21,7 +21,6 @@ Elpi Accumulate canonical_solution lp:{{
 solve (goal Ctx _ _Ty Sol [trm Proj, trm Rhs]) _ :-
   coq.say "cs on " Proj Rhs,
   cs Ctx Proj Rhs Sol,
-  coq.say "leaving cs " Sol,
   % std.assert! (P = {{ eq_refl lp:Lhs }}) "cs: wrong solution".
   true.
 

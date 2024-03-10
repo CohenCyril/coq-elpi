@@ -12,10 +12,10 @@ module Evarconv = Evarconv
 let elpi_cs_hook program env sigma ((proji, u), params1, c1) (t2, args2) =
 	  let loc = API.Ast.Loc.initial "(unknown)" in
 	  let atts = [] in
-	  let () = if Evarutil.is_ground_term sigma c1 then raise Not_found in
      let rhs = Reductionops.Stack.zip sigma (t2, Reductionops.Stack.append_app_list args2 Reductionops.Stack.empty) in
 	  let sigma, goal = Evarutil.new_evar env sigma (Retyping.get_type_of env sigma c1) in
 	  let goal_evar, _ = EConstr.destEvar sigma goal in
+	  let () = Feedback.msg_info Pp.(str "entering cs hook with " ++ str (if Evd.Metamap.is_empty (Evd.meta_list sigma) then "no" else "some") ++ str " metas") in
 	  let query ~depth state =
 		 let state, (loc, q), gls =
 			Coq_elpi_HOAS.goals2query sigma [goal_evar] loc ~main:(Coq_elpi_HOAS.Solve [EConstr.mkApp (EConstr.mkConstU (proji, u), Array.of_list params1); rhs])
