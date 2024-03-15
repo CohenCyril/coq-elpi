@@ -2426,10 +2426,12 @@ let get_declared_goals all_goals constraints state assignments pp_ctx =
 *)
 
 let rec reachable1 sigma root acc =
-  let EvarInfo info = Evd.find sigma root in
-  let res = match Evd.evar_body info with Evd.Evar_empty -> Evar.Set.add root acc | Evd.Evar_defined _ -> acc in
-  let res = Evar.Set.union res @@ Evarutil.filtered_undefined_evars_of_evar_info sigma info in
-  if Evar.Set.equal res acc then acc else reachable sigma res res
+  try
+     let EvarInfo info = Evd.find sigma root in
+     let res = match Evd.evar_body info with Evd.Evar_empty -> Evar.Set.add root acc | Evd.Evar_defined _ -> acc in
+     let res = Evar.Set.union res @@ Evarutil.filtered_undefined_evars_of_evar_info sigma info in
+     if Evar.Set.equal res acc then acc else reachable sigma res res
+  with _ -> acc (* Absolutely terrible hack, hiding the fact that some evar was not registered in the evar_map. *)
 and reachable sigma roots acc =
   Evar.Set.fold (reachable1 sigma) roots acc
 
@@ -2445,6 +2447,7 @@ let reachable sigma roots acc =
 let solution2evd sigma0 { API.Data.constraints; assignments; state; pp_ctx } roots =
   let state, solved_goals, _, _gls = elpi_solution_to_coq_solution ~calldepth:0 constraints state in
   let sigma = get_sigma state in
+  let roots = Evar.Set.union (Evd.undefined_evars sigma0) (Evar.Set.union (Evd.defined_evars sigma0) roots) in
   let all_goals = reachable sigma roots Evar.Set.empty in
   let declared_goals, shelved_goals =
     get_declared_goals (Evar.Set.diff all_goals solved_goals) constraints state assignments pp_ctx in

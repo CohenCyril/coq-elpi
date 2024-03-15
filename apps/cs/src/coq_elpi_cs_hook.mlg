@@ -13,9 +13,9 @@ let elpi_cs_hook program env sigma ((proji, u), params1, c1) (t2, args2) =
 	  let loc = API.Ast.Loc.initial "(unknown)" in
 	  let atts = [] in
      let rhs = Reductionops.Stack.zip sigma (t2, Reductionops.Stack.append_app_list args2 Reductionops.Stack.empty) in
-	  let sigma, goal = Evarutil.new_evar env sigma (Retyping.get_type_of env sigma c1) in
+     let sigma, (goal_ty, _) = Evarutil.new_type_evar env sigma Evd.UnivRigid in
+	  let sigma, goal = Evarutil.new_evar env sigma goal_ty in
 	  let goal_evar, _ = EConstr.destEvar sigma goal in
-	  let () = Feedback.msg_info Pp.(str "entering cs hook with " ++ str (if Evd.Metamap.is_empty (Evd.meta_list sigma) then "no" else "some") ++ str " metas") in
 	  let query ~depth state =
 		 let state, (loc, q), gls =
 			Coq_elpi_HOAS.goals2query sigma [goal_evar] loc ~main:(Coq_elpi_HOAS.Solve [EConstr.mkApp (EConstr.mkConstU (proji, u), Array.of_list params1); rhs])
@@ -31,23 +31,31 @@ let elpi_cs_hook program env sigma ((proji, u), params1, c1) (t2, args2) =
 			let gls = Evar.Set.singleton goal_evar in
 			let sigma, _, _ = Coq_elpi_HOAS.solution2evd sigma solution gls in
 			if Evd.is_defined sigma goal_evar then
-           let lhs = Reductionops.Stack.zip sigma (EConstr.mkConstU (proji, u), Reductionops.Stack.append_app_list (params1 @ [goal]) Reductionops.Stack.empty) in
-           let lhs = Reductionops.whd_const proji env sigma lhs in
-			  let lhs = Reductionops.whd_betaiotazeta env sigma lhs in
-			  let hh, sk1 = EConstr.decompose_app sigma lhs in
-			  let _, params = EConstr.decompose_app sigma (Retyping.get_type_of env sigma goal) in
+           let constant = EConstr.to_constr sigma goal in
+			  let args_goal, t = Reduction.whd_decompose_lambda env constant in
+			  let args_type = List.rev_map Context.Rel.Declaration.get_type args_goal in
+			  let args_type = List.map EConstr.of_constr args_type in
+           let args = snd (Constr.decompose_app_list t) in
+           let nparams = List.length params1 in
+           let params, projs = CList.chop nparams args in
+           let i = Structures.Structure.projection_number env proji in
+           let lhs = List.nth projs i in
+			  let lhs = EConstr.of_constr lhs in
+			  let _, sk1 = EConstr.decompose_app sigma lhs in
 			  let open Structures.CanonicalSolution in
 			  Some (sigma, {
-				 constant = goal;
-				 abstractions_ty = [];
+				 constant = EConstr.of_constr constant;
+				 abstractions_ty = args_type;
 				 body = lhs;
-				 nparams = List.length params1;
-				 params = Array.to_list params;
+				 nparams;
+				 params = List.map EConstr.of_constr params;
 				 cvalue_abstraction = None;
 				 cvalue_arguments = Array.to_list sk1})
 			else None
 		 | API.Execute.NoMoreSteps
-		 | API.Execute.Failure -> None end
+		 | API.Execute.Failure -> None
+		 | exception e -> Feedback.msg_info Pp.(str "cs hook run failed with: " ++ CErrors.print e); raise e
+		 end
 
 let add_cs_hook =
   let cs_hook_program = Summary.ref ~name:"elpi-cs" None in

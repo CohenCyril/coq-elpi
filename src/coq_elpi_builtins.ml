@@ -3176,23 +3176,21 @@ Universe constraints are put in the constraint store.|})))),
   (fun t ety diag ~depth proof_context _ state ->
      try
        let sigma = get_sigma state in
+       let (sigma, conv_pbs) = Evd.extract_all_conv_pbs sigma in
        let sigma, ty = Typing.type_of proof_context.env sigma t in
-       match ety with
+       let sigma, r = match ety with
        | Data ety ->
            let sigma = Evarconv.unify proof_context.env sigma ~with_ho:true Conversion.CUMUL ty ety in
-           let state, assignments = set_current_sigma ~depth state sigma in
-           state, ?: None +! B.mkOK, assignments
+           sigma, ?: None +! B.mkOK
        | NoData ->
            let flags = Evarconv.default_flags_of TransparentState.full in
            let sigma = Evarconv.solve_unif_constraints_with_heuristics ~flags ~with_ho:true proof_context.env sigma in
-           let state, assignments = set_current_sigma ~depth state sigma in
-           state, !: ty +! B.mkOK, assignments
-     with Pretype_errors.PretypeError (env, sigma, err) ->
-       match diag with
-       | Data B.OK ->
-          (* optimization: don't print the error if caller wants OK *)
-          raise No_clause
-       | _ ->
+           sigma, !: ty +! B.mkOK
+       in let sigma = List.fold_left (fun sigma conv_pb -> Evd.add_conv_pb conv_pb sigma) sigma conv_pbs in
+       let state, assignments = set_current_sigma ~depth state sigma in
+       state, r, assignments
+     with | Pretype_errors.PretypeError (env, sigma, err) ->
+
           let error = string_of_ppcmds proof_context.options @@ Himsg.explain_pretype_error env sigma err in
           state, ?: None +! B.mkERROR error, [])),
   DocAbove);
@@ -3208,17 +3206,19 @@ Universe constraints are put in the constraint store.|})))),
   (fun ty es diag ~depth proof_context _ state ->
      try
        let sigma = get_sigma state in
+       let (sigma, conv_pbs) = Evd.extract_all_conv_pbs sigma in
        let sigma, s = Typing.sort_of proof_context.env sigma ty in
-       match es with
+       let sigma, r = match es with
        | Data es ->
            let sigma = Evarconv.unify proof_context.env sigma ~with_ho:true Conversion.CUMUL (EConstr.mkSort s) (EConstr.mkSort (EConstr.ESorts.make es)) in
-           let state, assignments = set_current_sigma ~depth state sigma in
-           state, !: es +! B.mkOK, assignments
+           sigma, !: es +! B.mkOK
        | NoData ->
            let flags = Evarconv.default_flags_of TransparentState.full in
            let sigma = Evarconv.solve_unif_constraints_with_heuristics ~flags ~with_ho:true proof_context.env sigma in
-           let state, assignments = set_current_sigma ~depth state sigma in
-           state, !: (EConstr.ESorts.kind sigma s) +! B.mkOK, assignments
+           sigma, !: (EConstr.ESorts.kind sigma s) +! B.mkOK
+       in let sigma = List.fold_left (fun sigma conv_pb -> Evd.add_conv_pb conv_pb sigma) sigma conv_pbs in
+       let state, assignments = set_current_sigma ~depth state sigma in
+       state, r, assignments
      with Pretype_errors.PretypeError (env, sigma, err) ->
        match diag with
        | Data B.OK ->
@@ -3611,8 +3611,6 @@ Supported attributes:
       let no_tc = if proof_context.options.no_tc = Some true then true else false in
       let open Ltac_plugin in
       let sigma = get_sigma state in
-      let () = Feedback.msg_info Pp.(str "enter call-ltac1 with " ++ str (if Evd.Metamap.is_empty (Evd.meta_list sigma) then "no" else "some") ++ str " metas") in
-
        let tac_args = tac_args |> List.map (function
          | Coq_elpi_arg_HOAS.Ctrm t -> Tacinterp.Value.of_constr t
          | Coq_elpi_arg_HOAS.Cstr s -> Geninterp.(Val.inject (val_tag (Genarg.topwit Stdarg.wit_string))) s
@@ -3648,7 +3646,6 @@ Supported attributes:
             let (), pv, _, _ =
               let vernac_state = Vernacstate.freeze_full_state () in
               try
-                let () = Feedback.msg_info Pp.(str "calling tactic with " ++ str (if Evd.Metamap.is_empty (Evd.meta_list (snd (proofview pv))) then "no" else "some") ++ str " metas") in
                 let rc = apply ~name:(Id.of_string "elpi") ~poly:false proof_context.env focused_tac pv in
                 let pstate = Vernacstate.Stm.pstate (Vernacstate.freeze_full_state ()) in
                 let vernac_state = Vernacstate.Stm.set_pstate vernac_state pstate in

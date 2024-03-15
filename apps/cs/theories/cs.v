@@ -18,9 +18,12 @@ Elpi Tactic canonical_solution.
 Elpi Accumulate Db cs.db.
 Elpi Accumulate canonical_solution lp:{{
 
-solve (goal Ctx _ _Ty Sol [trm Proj, trm Rhs]) _ :-
-  coq.say "cs on " Proj Rhs,
-  cs Ctx Proj Rhs Sol,
+solve (goal Ctx _ Ty Sol [trm Proj, trm Rhs]) _ :-
+  coq.say "cs on " Proj Rhs " for " Ty,
+  std.findall (canonical-instance _ _ _) S,
+  coq.say "canonical instances :" S,
+  cs Ctx Proj Rhs Sol',
+  Sol = Sol',
   % std.assert! (P = {{ eq_refl lp:Lhs }}) "cs: wrong solution".
   true.
 
